@@ -2,3 +2,6 @@
 venv/
 
 *.pdf
+*.txt
+*.__pycache__
+*.pyc

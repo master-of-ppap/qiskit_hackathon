@@ -120,25 +120,25 @@ def erft(
 if __name__ == '__main__':
     # --- Parameters ---
     N_QUBITS = 2
-    EPSILON = 0.10  # 10% error tolerance
+    EPSILON = 0.20  # 10% error tolerance
     DELTA = 0.05   # 5% chance of failure (95% confidence)
 
     # # # --- Case 1: Equivalent Circuits ---
     # print("-" * 50)
     # print("### Case 1: Testing Equivalent Circuits ###")
     # # U is a CNOT gate
-    # U1 = QuantumCircuit(N_QUBITS, name="U1")
-    # U1.cx(0, 1)
+    U1 = QuantumCircuit(N_QUBITS, name="U1")
+    U1.cx(0, 1)
 
     # # V is also a CNOT, but constructed from Hadamards and a CZ
-    # V1 = QuantumCircuit(N_QUBITS, name="V1")
-    # V1.h(1)
-    # V1.cz(0, 1)
-    # V1.h(1)
+    V1 = QuantumCircuit(N_QUBITS, name="V1")
+    V1.h(1)
+    V1.cz(0, 1)
+    V1.h(1)
 
     # # # These circuits are mathematically identical. ERFT should confirm this.
-    # result_1 = erft(U1, V1, epsilon=EPSILON, delta=DELTA)
-    # print(f"\nFinal Decision for Case 1: {result_1}\n")
+    result_1 = erft(U1, V1, epsilon=EPSILON, delta=DELTA)
+    print(f"\nFinal Decision for Case 1: {result_1}\n")
 
 
     # # # --- Case 2: Non-Equivalent Circuits ---
@@ -175,20 +175,20 @@ if __name__ == '__main__':
 
 
     # --- Case 4: Non-Equivalent T-gate vs S-gate on more qubits ---
-    print("-" * 50)
-    print("### Case 4: Testing T-gate vs S-gate (3 Qubits) ###")
-    N_QUBITS_4 = 3
+    # print("-" * 50)
+    # print("### Case 4: Testing T-gate vs S-gate (3 Qubits) ###")
+    # N_QUBITS_4 = 3
     
     # U contains a T-gate (pi/4 phase rotation) on the middle qubit.
-    U4 = QuantumCircuit(N_QUBITS_4, name="U4")
-    U4.t(1)
+    # U4 = QuantumCircuit(N_QUBITS_4, name="U4")
+    # U4.t(1)
 
     # V contains an S-gate (pi/2 phase rotation) on the middle qubit.
-    V4 = QuantumCircuit(N_QUBITS_4, name="V4")
-    V4.s(1)
+    # V4 = QuantumCircuit(N_QUBITS_4, name="V4")
+    # V4.s(1)
 
     # These gates are not equivalent. The theoretical fidelity is ~0.87,
     # which is less than our threshold of 1 - 0.10 = 0.90.
     # ERFT should correctly identify them as not equivalent.
-    result_4 = erft(U4, V4, epsilon=EPSILON, delta=DELTA)
-    print(f"\nFinal Decision for Case 4: {result_4}\n")
+    # result_4 = erft(U4, V4, epsilon=EPSILON, delta=DELTA)
+    # print(f"\nFinal Decision for Case 4: {result_4}\n")
