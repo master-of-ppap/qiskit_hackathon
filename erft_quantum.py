@@ -8,6 +8,8 @@ from qiskit.converters import circuit_to_dag, dag_to_circuit
 from qiskit_ibm_runtime.fake_provider import FakeBrisbane
 import mthree
 
+from random_clifford import random_clifford_circuit
+
 def truncate_circuit_depth(qc: QuantumCircuit, max_depth: int) -> QuantumCircuit:
     new_qc = QuantumCircuit(qc.num_qubits, qc.num_clbits)
     current_depth = 0
@@ -30,6 +32,8 @@ def truncate_circuit_depth(qc: QuantumCircuit, max_depth: int) -> QuantumCircuit
             occupied_qubits.add(q.index)
 
     return new_qc
+
+backend = FakeBrisbane()
 
 def erft(
     U: QuantumCircuit,
@@ -57,7 +61,7 @@ def erft(
         or "Not equivalent".
     """
     # Open file for output
-    f = open(outfile, "w")
+    # f = open(outfile, "w")
 
     # --- Validate Inputs ---
     if U.num_qubits != V.num_qubits:
@@ -68,9 +72,9 @@ def erft(
         raise ValueError("Delta (δ) must be between 0 and 1.")
 
     num_qubits = U.num_qubits
-    f.write(f"  Starting ERFT for {num_qubits}-qubit circuits...\n")
-    f.write(f"   - ε (error tolerance): {epsilon}\n")
-    f.write(f"   - δ (failure probability): {delta}\n")
+    print(f"  Starting ERFT for {num_qubits}-qubit circuits...\n")
+    print(f"   - ε (error tolerance): {epsilon}\n")
+    print(f"   - δ (failure probability): {delta}\n")
 
     # --- Step 1: Define the "difference" circuit ---
     # We want to check if W = U†V is the identity.
@@ -83,7 +87,7 @@ def erft(
     # many trials (m) we need to be (1-δ)-confident that our estimated
     # fidelity is within ε of the true fidelity.
     m = int(np.ceil((1 / (2 * epsilon**2)) * np.log(2 / delta)))
-    f.write(f"   - m (required samples): {m}\n")
+    print(f"   - m (required samples): {m}\n")
 
     total_survivals = 0
     
@@ -92,7 +96,7 @@ def erft(
     # TODO: Replace simulator with real hardware
     # service = QiskitRuntimeService()
     # backend = service.backend("ibm_brisbane")
-    backend = FakeBrisbane()
+
     # backend = AerSimulator()
     print(backend.name)
 
@@ -102,16 +106,17 @@ def erft(
 
     sampler = Sampler(mode=backend)
     # simulator = AerSimulator(method='statevector')
+    circuits = []
 
     # --- Step 3: Loop through m samples ---
-    f.write(f"\n\n  Running {m} randomized trials...\n")
+    print(f"\n\n  Running {m} randomized trials...\n")
     for i in range(m):
         # 3a. Sample a random n-qubit Clifford operator C_i
         # qiskit.quantum_info.random_clifford is highly optimized and works
         # efficiently even for large numbers of qubits.
-        clifford_op = random_clifford(num_qubits)
-        C_i = clifford_op.to_circuit()
-        C_i = truncate_circuit_depth(C_i, 3)
+        C_i = random_clifford_circuit(num_qubits, depth=2, seed=seed)
+        # C_i = clifford_op.to_circuit()
+        # C_i = truncate_circuit_depth(C_i, 3)
         C_i.name = f"C_{i+1}"
         
         # We also need its inverse (adjoint) for the "twirl".
@@ -138,50 +143,66 @@ def erft(
         
         # 3f. Measure in the computational basis.
         # sabre_circuit.measure_all()
+        # print(C_i)
+        # print(C_i_dagger)
+        # print(test_circuit.draw('text', idle_wires=True, fold=60, scale=0.5))
+        # test_circuit.draw('mpl', idle_wires=True, fold=60, scale=0.5)  
+        # import matplotlib.pyplot as plt
+        # plt.show()
         test_circuit.measure_all()
         # test_circuit.measure(range(num_qubits), range(num_qubits))
 
         # Run the simulation for this single trial (shots=1).
         # Transpiling optimizes the circuit for the target backend (our simulator).
         transpiled_circuit = transpile(test_circuit, backend)
-        result = sampler.run([transpiled_circuit], shots=1).result()
-        # counts = result[0].data.meas.get_counts()
-        counts = mit.apply_correction(result[0].data.meas.get_counts(), range(num_qubits))
+        circuits.append(transpiled_circuit)
+        
         # transpiled_circuit = transpile(test_circuit, simulator)
         # result = simulator.run(transpiled_circuit, shots=1, seed=seed).result()
         # counts = result.get_counts(0)
 
         # 3g. Record "survival" if the result is the all-zeros string '00...0'.
         # The all-zeros string is our target "survival" state.
-        all_zeros_outcome = '0' * num_qubits
-        if all_zeros_outcome in counts:
+    
+    total_survivals = 0
+    results = sampler.run(circuits, shots=1).result()
+    for result in results:
+        counts = mit.apply_correction(result.data.meas.get_counts(), range(num_qubits))
+        # Check if 00, if so, increment counter
+        if counts.get('0' * num_qubits, 0) > 0:
             total_survivals += 1
+            print(f"Trial {i+1}: Survival (measured '0' * {num_qubits})")
+        else:
+            print(f"Trial {i+1}: Not a survival (measured {counts})")
+    
+    # counts = result[0].data.meas.get_counts()
+
 
     # --- Step 4: Compute average survival probability (estimated fidelity) ---
     F_hat = total_survivals / m
-    f.write(f"\n\n  Results:\n")
-    f.write(f"   - Total 'survival' counts: {total_survivals} / {m}\n")
-    f.write(f"   - Estimated Fidelity (F_hat): {F_hat:.4f}\n")
+    print(f"\n\n  Results:\n")
+    print(f"   - Total 'survival' counts: {total_survivals} / {m}\n")
+    print(f"   - Estimated Fidelity (F_hat): {F_hat:.4f}\n")
 
     # --- Step 5: Decide equivalence ---
     # If the circuits are equivalent, the fidelity should be 1. We check if
     # our estimated fidelity is within our tolerance ε.
     decision_threshold = 1 - epsilon
-    f.write(f"   - Decision Threshold (1 - ε): {decision_threshold:.4f}\n")
+    print(f"   - Decision Threshold (1 - ε): {decision_threshold:.4f}\n")
 
     if F_hat >= decision_threshold:
-        f.write("   - Outcome: F_hat ≥ 1 - ε\n")
+        print("   - Outcome: F_hat ≥ 1 - ε\n")
         return "  Equivalent (within ε)"
     else:
-        f.write("   - Outcome: F_hat < 1 - ε\n")
+        print("   - Outcome: F_hat < 1 - ε\n")
         return "  Not equivalent"
 
 # --- Example Usage ---
 if __name__ == '__main__':
     # --- Parameters ---
     N_QUBITS = 2
-    EPSILON = 0.20  # 10% error tolerance
-    DELTA = 0.05   # 5% chance of failure (95% confidence)
+    EPSILON = 0.30  # 10% error tolerance
+    DELTA = 0.10   # 5% chance of failure (95% confidence)
 
     # # # --- Case 1: Equivalent Circuits ---
     # f.write("-" * 50)
@@ -198,7 +219,7 @@ if __name__ == '__main__':
 
     # # # These circuits are mathematically identical. ERFT should confirm this.
     result_1 = erft(U1, V1, epsilon=EPSILON, delta=DELTA)
-    f.write(f"\n\nFinal Decision for Case 1: {result_1}\n")
+    print(f"\n\nFinal Decision for Case 1: {result_1}\n")
 
 
     # # # --- Case 2: Non-Equivalent Circuits ---

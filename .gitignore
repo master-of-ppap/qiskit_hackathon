@@ -5,3 +5,5 @@ venv/
 *.txt
 *.__pycache__
 *.pyc
+
+api.py
