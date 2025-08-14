@@ -7,3 +7,5 @@ venv/
 *.pyc
 
 api.py
+
+output
