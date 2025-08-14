@@ -33,7 +33,9 @@ def truncate_circuit_depth(qc: QuantumCircuit, max_depth: int) -> QuantumCircuit
 
     return new_qc
 
-backend = FakeBrisbane()
+# service = QiskitRuntimeService()
+# backend = service.backend("ibm_brisbane")
+# backend = FakeBrisbane()
 
 def erft(
     U: QuantumCircuit,
@@ -41,7 +43,8 @@ def erft(
     epsilon: float,
     delta: float,
     seed: int = None,
-    outfile=None
+    outfile=None,
+    backend=None
 ) -> str:
     """
     Determines if two quantum circuits, U and V, are equivalent using the
@@ -79,7 +82,11 @@ def erft(
     # --- Step 1: Define the "difference" circuit ---
     # We want to check if W = U†V is the identity.
     # The .inverse() method computes the adjoint (dagger) of a unitary circuit.
+
     W = U.inverse().compose(V)
+    print(f"Testing on depth of {W.depth()} and size of {W.size()} gates.")
+    print(f"Depth of U: {U.depth()}, Depth of V: {V.depth()}")
+    print(f"Size of U: {U.size()}, Size of V: {V.size()}")
     W.name = "W = U†V"
 
     # --- Step 2: Determine number of samples needed ---
@@ -98,7 +105,7 @@ def erft(
     # backend = service.backend("ibm_brisbane")
 
     # backend = AerSimulator()
-    print(backend.name)
+    print("In erft_quantum.py: " + backend.name)
 
     # Get backend values for applying error mitigation
     mit = mthree.M3Mitigation(backend)
@@ -133,6 +140,7 @@ def erft(
         test_circuit.append(W, range(num_qubits))
         test_circuit.append(C_i_dagger, range(num_qubits))
 
+        
         # Test (routing)
         # sabre_pass = SabreLayout(coupling_map=backend.coupling_map,
         #                             swap_trials=10,
@@ -171,9 +179,6 @@ def erft(
         # Check if 00, if so, increment counter
         if counts.get('0' * num_qubits, 0) > 0:
             total_survivals += 1
-            print(f"Trial {i+1}: Survival (measured '0' * {num_qubits})")
-        else:
-            print(f"Trial {i+1}: Not a survival (measured {counts})")
     
     # counts = result[0].data.meas.get_counts()
 
@@ -200,9 +205,9 @@ def erft(
 # --- Example Usage ---
 if __name__ == '__main__':
     # --- Parameters ---
-    N_QUBITS = 2
-    EPSILON = 0.30  # 10% error tolerance
-    DELTA = 0.10   # 5% chance of failure (95% confidence)
+    N_QUBITS = 4
+    EPSILON = 0.1  # 10% error tolerance
+    DELTA = 0.05   # 5% chance of failure (95% confidence)
 
     # # # --- Case 1: Equivalent Circuits ---
     # f.write("-" * 50)
@@ -210,6 +215,7 @@ if __name__ == '__main__':
     # # U is a CNOT gate
     U1 = QuantumCircuit(N_QUBITS, name="U1")
     U1.cx(0, 1)
+    U1.cx(2, 3)
 
     # # V is also a CNOT, but constructed from Hadamards and a CZ
     V1 = QuantumCircuit(N_QUBITS, name="V1")
@@ -217,6 +223,9 @@ if __name__ == '__main__':
     V1.cz(0, 1)
     V1.h(1)
 
+    V1.h(3)
+    V1.cz(2, 3)
+    V1.h(3)
     # # # These circuits are mathematically identical. ERFT should confirm this.
     result_1 = erft(U1, V1, epsilon=EPSILON, delta=DELTA)
     print(f"\n\nFinal Decision for Case 1: {result_1}\n")
